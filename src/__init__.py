@@ -8,6 +8,9 @@ class XFileMode(Enum):
     TEXT_MODE = 1
 
 
+class ParseError(Exception): ...
+
+
 @dataclass
 class XFile: ...
 
@@ -69,7 +72,19 @@ class XTextParser:
         self.col_no = 0
         self.lines = contents.splitlines()
 
-        print(self.consume_many(45))
+        if not self.consume_many(4) == "xof ":
+            raise ParseError("expected 'xof ' at position 0")
+
+        if not (ver := self.consume_many(4)) == "0303":
+            ver_string = f"{int(ver[0:2])}.{int(ver[2:4])}"
+            raise ParseError(f"unsupported .X version - expected 3.2, got {ver_string}")
+
+        if not (typ := self.consume_many(4)) == "txt ":
+            raise ParseError(
+                f"wrong parse type specified - expected text but got '{typ}'"
+            )
+
+        float_size = self.consume_many(4)
 
 
 @overload
