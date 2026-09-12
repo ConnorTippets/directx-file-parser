@@ -37,14 +37,39 @@ class XTextParser:
 
         return char
 
+    def consume_many(self, amount: int = 1) -> str:
+        if self.line_no >= len(self.lines):
+            return ""
+
+        this_line = self.lines[self.line_no]
+        output = this_line[self.col_no : self.col_no + amount]
+        self.col_no += amount
+
+        while len(output) < amount:
+            self.line_no += 1
+            self.col_no = 0
+            if self.line_no >= len(self.lines):
+                return output
+            output = output + "\n"
+
+            amount_left = amount - len(output)
+
+            next_line = self.lines[self.line_no]
+            output = output + next_line[self.col_no : self.col_no + amount_left]
+            self.col_no += amount_left
+
+        if self.col_no == len(this_line):
+            self.line_no += 1
+            self.col_no = 0
+
+        return output
+
     def parse(self, contents: str) -> XFile:
         self.line_no = 0
         self.col_no = 0
         self.lines = contents.splitlines()
 
-        print(self.consume())
-        print(self.consume())
-        print(self.consume())
+        print(self.consume_many(45))
 
 
 @overload
