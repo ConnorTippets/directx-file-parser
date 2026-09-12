@@ -16,6 +16,7 @@ class XParser:
     def __init__(self):
         self.line_no = 0
         self.col_no = 0
+        self.lines: list[str] = []
 
     @overload
     def parse(self, contents: str, mode: Literal[XFileMode.TEXT_MODE]) -> XFile: ...
@@ -36,6 +37,12 @@ class XParser:
             raise ValueError("mode was set to BINARY_MODE, but a string was provided")
         if isinstance(contents, bytes) and mode is XFileMode.TEXT_MODE:
             contents = contents.decode("utf-8")
+
+        if mode is XFileMode.BINARY_MODE or isinstance(contents, bytes):
+            raise ValueError("binary mode is unsupported currently")
+
+        self.lines = contents.splitlines()
+        print(self.lines)
 
 
 @overload
