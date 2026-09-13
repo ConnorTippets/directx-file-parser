@@ -17,6 +17,7 @@ class XTokenType(Enum):
     ELLIPSIS = auto()
     NUMBER = auto()
     STRING = auto()
+    PERIOD = auto()
 
 
 @dataclass
@@ -72,10 +73,11 @@ class XTextTokenizer:
                     self.consume_char()
                     self.consume_char()
                     self.tokens.append(XToken(XTokenType.ELLIPSIS, "..."))
+                elif self.peek_char().isdigit():
+                    # This case is handled below
+                    pass
                 else:
-                    raise ParseError(
-                        "TODO: float values 0-1 with leading zero removed (.5)"
-                    )
+                    self.tokens.append(XToken(XTokenType.PERIOD, "."))
             elif char == '"':
                 start_index = self.index - 1
                 string = ""
@@ -109,7 +111,7 @@ class XTextTokenizer:
                     ident = ident + self.consume_char()
 
                 self.tokens.append(XToken(XTokenType.IDENT, ident))
-            elif char.isdigit() or (char == "-" and self.peek_char().isdigit()):
+            elif char.isdigit() or (char in "-." and self.peek_char().isdigit()):
                 num = char
                 has_dot = False
                 while (num_char := self.peek_char()).isdigit() or (
