@@ -31,11 +31,34 @@ class XTextParser:
 
             if not (name_tok := self.peek()).type == XTokenType.IDENT:
                 raise ParseError(
-                    f"unexpected token `{name_tok.val}` at index {name_tok.idx}"
+                    f"`{name_tok.val}` at index {name_tok.idx} is not a valid template name"
                 )
 
-            name = name_tok.val
+            name = self.consume().val
             print(f"template name is {name}")
+
+            if not (l_brack := self.peek()).type == XTokenType.L_BRACKET:
+                raise ParseError(
+                    f"expected '{{' during template def at {l_brack.idx}, got `{l_brack.val}`"
+                )
+
+            self.consume()
+
+            if not (newline := self.peek()).type == XTokenType.EOL:
+                raise ParseError(
+                    f"expected newline during template def at {newline.idx}, got `{newline.val}`"
+                )
+
+            self.consume()
+
+            if not (uuid_tok := self.peek()).type == XTokenType.UUID:
+                raise ParseError(
+                    f"expected UUID during template def at {uuid_tok.idx}, got `{uuid_tok.val}`"
+                )
+
+            uuid = self.consume().val
+            print(f"template uuid is {uuid}")
+            breakpoint()
 
         while not self.peek().type in (XTokenType.EOL, XTokenType.EOF):
             self.consume()
