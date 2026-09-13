@@ -1,14 +1,26 @@
 from dataclasses import dataclass
-from typing import overload, Literal
-from enum import Enum
+from typing import TypedDict
+from enum import Enum, auto
 
 
-class XFileMode(Enum):
-    BINARY_MODE = 0
-    TEXT_MODE = 1
+class XTokenType(Enum):
+    EOL = auto()
+    IDENT = auto()
+
+
+@dataclass
+class XToken:
+    typ: XTokenType
+    val: str
 
 
 class ParseError(Exception): ...
+
+
+class XHeader(TypedDict):
+    version: str
+    encoding: str
+    float_size: str
 
 
 @dataclass
@@ -17,100 +29,71 @@ class XFile: ...
 
 class XTextParser:
     def __init__(self):
-        self.line_no = 0
-        self.col_no = 0
-        self.lines: list[str] = []
+        self.index = 0
+        self.contents: str = ""
+        self.header: XHeader | None = None
+        self.tokens: list[XToken] = []
 
-    def peek(self) -> str:
+    def peek_char(self) -> str:
         try:
-            return self.lines[self.line_no][self.col_no]
+            return self.contents[self.index]
         except IndexError:
             return ""
 
-    def consume(self) -> str:
-        char = self.peek()
-
-        if self.line_no >= len(self.lines):
+    def consume_char(self) -> str:
+        try:
+            char = self.contents[self.index]
+            self.index += 1
             return char
-
-        self.col_no += 1
-        if self.col_no >= len(self.lines[self.line_no]):
-            self.line_no += 1
-            self.col_no = 0
-
-        return char
-
-    def consume_many(self, amount: int = 1) -> str:
-        if self.line_no >= len(self.lines):
+        except IndexError:
             return ""
 
-        this_line = self.lines[self.line_no]
-        output = this_line[self.col_no : self.col_no + amount]
-        self.col_no += amount
-
-        while len(output) < amount:
-            self.line_no += 1
-            self.col_no = 0
-            if self.line_no >= len(self.lines):
-                return output
-            output = output + "\n"
-
-            amount_left = amount - len(output)
-
-            next_line = self.lines[self.line_no]
-            output = output + next_line[self.col_no : self.col_no + amount_left]
-            self.col_no += amount_left
-
-        if self.col_no == len(this_line):
-            self.line_no += 1
-            self.col_no = 0
-
-        return output
-
-    def parse(self, contents: str) -> XFile:
+    def parse(self, contents: str, header: XHeader) -> XFile:
         self.line_no = 0
         self.col_no = 0
-        self.lines = contents.splitlines()
+        self.contents = "\n".join(contents.splitlines()[1:])
+        self.tokens = []
+        # skip the header line, already parsed
 
-        if not self.consume_many(4) == "xof ":
-            raise ParseError("expected 'xof ' at position 0")
+        self.header = header
 
-        if not (ver := self.consume_many(4)) == "0303":
-            ver_string = f"{int(ver[0:2])}.{int(ver[2:4])}"
-            raise ParseError(f"unsupported .X version - expected 3.2, got {ver_string}")
+        while self.peek_char():
+            char = self.consume_char()
+            if char == "\n":
+                self.tokens.append(XToken(XTokenType.EOL, "\n"))
+            if char.isalpha():
+                ident = char
+                while (ident_char := self.peek_char()).isalnum():
+                    ident = ident + ident_char
+                    self.consume_char()
 
-        if not (typ := self.consume_many(4)) == "txt ":
-            raise ParseError(
-                f"wrong parse type specified - expected text but got '{typ}'"
-            )
+                self.tokens.append(XToken(XTokenType.IDENT, ident))
+            elif char.isspace():
+                continue
+            else:
+                raise ParseError(f"unknown char '{char}' at index {self.index-1}")
 
-        float_size = self.consume_many(4)
-
-
-@overload
-def parse_x_file(contents: str, mode: Literal[XFileMode.TEXT_MODE]) -> XFile: ...
-
-
-@overload
-def parse_x_file(contents: bytes, mode: Literal[XFileMode.BINARY_MODE]) -> XFile: ...
-
-
-@overload
-def parse_x_file(contents: str | bytes, mode: XFileMode) -> XFile: ...
+        print(self.tokens)
 
 
-def parse_x_file(contents: str | bytes, mode: XFileMode) -> XFile:
-    if not (isinstance(contents, str) or isinstance(contents, bytes)):
-        raise ValueError("incorrect content type")
-    if not mode in (XFileMode.BINARY_MODE, XFileMode.TEXT_MODE, 0, 1):
-        raise ValueError("incorrect mode type")
+def parse_header(header: str) -> XHeader:
+    if not header[0:4] == "xof ":
+        raise ParseError("expected 'xof ' at position 0")
 
-    if isinstance(contents, str) and mode is XFileMode.BINARY_MODE:
-        raise ValueError("mode was set to BINARY_MODE, but a string was provided")
-    if isinstance(contents, bytes) and mode is XFileMode.TEXT_MODE:
-        contents = contents.decode("utf-8")
+    version = header[4:8]
+    encoding = header[8:12]
+    float_size = header[8:16]
 
-    if isinstance(contents, str):
-        return XTextParser().parse(contents)
+    return {"version": version, "encoding": encoding, "float_size": float_size}
+
+
+def parse_x_file(contents: bytes) -> XFile:
+    if len(contents) < 16:
+        raise ParseError("not a .X file")
+
+    header = parse_header(contents[:16].decode("ascii"))
+
+    if header["encoding"] == "txt ":
+        return XTextParser().parse(contents.decode("utf-8"), header)
     else:
         raise ValueError("binary mode is unsupported currently")
