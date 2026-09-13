@@ -14,6 +14,7 @@ class XTokenType(Enum):
     SEMI = auto()
     ELLIPSIS = auto()
     NUMBER = auto()
+    STRING = auto()
 
 
 @dataclass
@@ -88,6 +89,19 @@ class XTextParser:
                     raise ParseError(
                         "TODO: float values 0-1 with leading zero removed (.5)"
                     )
+            elif char == '"':
+                start_index = self.index - 1
+                string = ""
+                while (string_char := self.peek_char()) and not string_char in '\n"':
+                    string = string + self.consume_char()
+
+                if not string_char or string_char == "\n":
+                    raise ParseError(
+                        f"unterminated string literal at index {start_index}"
+                    )
+
+                self.consume_char()
+                self.tokens.append(XToken(XTokenType.STRING, string))
             elif char == "<":
                 # TODO: check if UUID is valid (ie the four parts have the right lengths or whatever)
                 uuid = ""
@@ -129,7 +143,6 @@ class XTextParser:
                 if self.peek_char() == "\n":
                     self.consume_char()
             else:
-                print(" ".join([tok.val for tok in self.tokens]))
                 raise ParseError(f"unknown char '{char}' at index {self.index-1}")
 
         print(self.tokens)
@@ -153,6 +166,11 @@ def parse_x_file(contents: bytes) -> XFile:
     header = parse_header(contents[:16].decode("ascii"))
 
     if header["encoding"] == "txt ":
-        return XTextParser().parse(contents.decode("utf-8"), header)
+        parser = XTextParser()
+        try:
+            return parser.parse(contents.decode("utf-8"), header)
+        except ParseError:
+            print(" ".join([tok.val for tok in parser.tokens]))
+            raise
     else:
         raise ValueError("binary mode is unsupported currently")
