@@ -9,6 +9,7 @@ class XTokenType(Enum):
     L_BRACKET = auto()
     R_BRACKET = auto()
     UUID = auto()
+    SEMI = auto()
 
 
 @dataclass
@@ -64,6 +65,8 @@ class XTextParser:
             char = self.consume_char()
             if char == "\n":
                 self.tokens.append(XToken(XTokenType.EOL, "\n"))
+            elif char == ";":
+                self.tokens.append(XToken(XTokenType.SEMI, ";"))
             elif char == "{":
                 self.tokens.append(XToken(XTokenType.L_BRACKET, "{"))
             elif char == "}":
@@ -92,7 +95,7 @@ class XTextParser:
             elif char.isspace():
                 continue
             else:
-                print([tok.val for tok in self.tokens])
+                print(" ".join([tok.val for tok in self.tokens]))
                 raise ParseError(f"unknown char '{char}' at index {self.index-1}")
 
         print(self.tokens)
