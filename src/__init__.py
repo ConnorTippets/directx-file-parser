@@ -8,6 +8,8 @@ class XTokenType(Enum):
     IDENT = auto()
     L_BRACKET = auto()
     R_BRACKET = auto()
+    L_ANGLE_BRACKET = auto()
+    R_ANGLE_BRACKET = auto()
 
 
 @dataclass
@@ -67,6 +69,10 @@ class XTextParser:
                 self.tokens.append(XToken(XTokenType.L_BRACKET, "{"))
             elif char == "}":
                 self.tokens.append(XToken(XTokenType.R_BRACKET, "}"))
+            elif char == "<":
+                self.tokens.append(XToken(XTokenType.L_ANGLE_BRACKET, "<"))
+            elif char == ">":
+                self.tokens.append(XToken(XTokenType.R_ANGLE_BRACKET, ">"))
             elif char.isalpha():
                 ident = char
                 while (ident_char := self.peek_char()).isalnum():
@@ -77,6 +83,7 @@ class XTextParser:
             elif char.isspace():
                 continue
             else:
+                print([tok.val for tok in self.tokens])
                 raise ParseError(f"unknown char '{char}' at index {self.index-1}")
 
         print(self.tokens)
