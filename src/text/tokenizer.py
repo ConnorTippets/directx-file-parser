@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from enum import Enum, auto
 
-from ..models import XFile, ParseError
+from ..models import ParseError
 
 
 class XTokenType(Enum):
     EOL = auto()
+    EOF = auto()
     IDENT = auto()
     L_BRACKET = auto()
     R_BRACKET = auto()

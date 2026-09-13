@@ -1,5 +1,6 @@
 from ..models import XHeader, XFile, ParseError
-from ..text.tokenizer import XTextTokenizer
+from .tokenizer import XTextTokenizer
+from .parser import XTextParser
 
 
 class XFileLoader:
@@ -17,4 +18,13 @@ class XFileLoader:
             print(tokenizer.tokens)
             raise
 
-        print(tokens)
+        parser = XTextParser()
+        try:
+            file = parser.parse(tokens)
+        except ParseError:
+            print(parser.file)
+            raise
+
+        print(file)
+
+        return file
