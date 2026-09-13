@@ -110,6 +110,12 @@ class XTextParser:
                 self.tokens.append(XToken(XTokenType.IDENT, ident))
             elif char.isspace():
                 continue
+            elif char == "#" or (char == "/" and self.peek_char() == "/"):
+                while (comment_char := self.peek_char()) and not comment_char == "\n":
+                    self.consume_char()
+
+                if self.peek_char() == "\n":
+                    self.consume_char()
             else:
                 print(" ".join([tok.val for tok in self.tokens]))
                 raise ParseError(f"unknown char '{char}' at index {self.index-1}")
