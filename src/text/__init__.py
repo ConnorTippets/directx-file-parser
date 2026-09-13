@@ -25,6 +25,4 @@ class XFileLoader:
             print(parser.file)
             raise
 
-        print(file)
-
         return file

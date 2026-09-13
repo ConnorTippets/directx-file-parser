@@ -23,8 +23,9 @@ class XTokenType(Enum):
 
 @dataclass
 class XToken:
-    typ: XTokenType
+    type: XTokenType
     val: str
+    idx: int
 
 
 class XTextTokenizer:
@@ -53,35 +54,35 @@ class XTextTokenizer:
         self.contents = contents
         self.tokens = []
 
-        while self.peek_char():
-            char = self.consume_char()
+        while char := self.peek_char():
             if char == "\n":
-                self.tokens.append(XToken(XTokenType.EOL, "\n"))
+                self.tokens.append(XToken(XTokenType.EOL, "\n", self.index))
             elif char == ";":
-                self.tokens.append(XToken(XTokenType.SEMI, ";"))
+                self.tokens.append(XToken(XTokenType.SEMI, ";", self.index))
             elif char == "{":
-                self.tokens.append(XToken(XTokenType.L_BRACKET, "{"))
+                self.tokens.append(XToken(XTokenType.L_BRACKET, "{", self.index))
             elif char == "}":
-                self.tokens.append(XToken(XTokenType.R_BRACKET, "}"))
+                self.tokens.append(XToken(XTokenType.R_BRACKET, "}", self.index))
             elif char == "[":
-                self.tokens.append(XToken(XTokenType.L_SQ_BRACKET, "["))
+                self.tokens.append(XToken(XTokenType.L_SQ_BRACKET, "[", self.index))
             elif char == "]":
-                self.tokens.append(XToken(XTokenType.R_SQ_BRACKET, "]"))
+                self.tokens.append(XToken(XTokenType.R_SQ_BRACKET, "]", self.index))
             elif char == ",":
-                self.tokens.append(XToken(XTokenType.COMMA, ","))
+                self.tokens.append(XToken(XTokenType.COMMA, ",", self.index))
             elif char == ".":
-                if self.peek_char() == "." and self.peek_char(1) == ".":
+                if self.peek_char(1) == "." and self.peek_char(2) == ".":
                     self.consume_char()
                     self.consume_char()
-                    self.tokens.append(XToken(XTokenType.ELLIPSIS, "..."))
-                elif self.peek_char().isdigit():
+                    self.consume_char()
+                    self.tokens.append(XToken(XTokenType.ELLIPSIS, "...", self.index))
+                elif self.peek_char(1).isdigit():
                     # This case is handled below
                     pass
                 else:
-                    self.tokens.append(XToken(XTokenType.PERIOD, "."))
+                    self.tokens.append(XToken(XTokenType.PERIOD, ".", self.index))
             elif char == '"':
-                start_index = self.index - 1
-                string = ""
+                start_index = self.index
+                string = self.consume_char()
                 while (string_char := self.peek_char()) and not string_char in '\n"':
                     string = string + self.consume_char()
 
@@ -91,10 +92,10 @@ class XTextTokenizer:
                     )
 
                 self.consume_char()
-                self.tokens.append(XToken(XTokenType.STRING, string))
+                self.tokens.append(XToken(XTokenType.STRING, string, self.index))
             elif char == "<":
                 # TODO: check if UUID is valid (ie the four parts have the right lengths or whatever)
-                uuid = ""
+                uuid = self.consume_char()
                 while (uuid_char := self.peek_char()).isalnum() or uuid_char == "-":
                     uuid = uuid + uuid_char
                     self.consume_char()
@@ -105,15 +106,15 @@ class XTextTokenizer:
                     )
 
                 self.consume_char()
-                self.tokens.append(XToken(XTokenType.UUID, uuid))
+                self.tokens.append(XToken(XTokenType.UUID, uuid, self.index))
             elif char.isalpha():
-                ident = char
+                ident = self.consume_char()
                 while (ident_char := self.peek_char()).isalnum() or ident_char in "_-":
                     ident = ident + self.consume_char()
 
-                self.tokens.append(XToken(XTokenType.IDENT, ident))
-            elif char.isdigit() or (char in "-." and self.peek_char().isdigit()):
-                num = char
+                self.tokens.append(XToken(XTokenType.IDENT, ident, self.index))
+            elif char.isdigit() or (char in "-." and self.peek_char(1).isdigit()):
+                num = self.consume_char()
                 has_dot = False
                 while (num_char := self.peek_char()).isdigit() or (
                     num_char == "." and not has_dot
@@ -123,16 +124,18 @@ class XTextTokenizer:
 
                     num = num + self.consume_char()
 
-                self.tokens.append(XToken(XTokenType.NUMBER, num))
+                self.tokens.append(XToken(XTokenType.NUMBER, num, self.index))
             elif char.isspace():
-                continue
-            elif char == "#" or (char == "/" and self.peek_char() == "/"):
+                pass
+            elif char == "#" or (char == "/" and self.peek_char(1) == "/"):
+                self.consume_char()
                 while (comment_char := self.peek_char()) and not comment_char == "\n":
                     self.consume_char()
 
                 if self.peek_char() == "\n":
                     self.consume_char()
             else:
-                raise ParseError(f"unknown char '{char}' at index {self.index-1}")
+                raise ParseError(f"unknown char '{char}' at index {self.index}")
+            self.consume_char()
 
         return self.tokens
