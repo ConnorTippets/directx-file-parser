@@ -95,7 +95,8 @@ class XTextTokenizer:
                 self.tokens.append(XToken(XTokenType.STRING, string, self.index))
             elif char == "<":
                 # TODO: check if UUID is valid (ie the four parts have the right lengths or whatever)
-                uuid = self.consume_char()
+                self.consume_char()
+                uuid = ""
                 while (uuid_char := self.peek_char()).isalnum() or uuid_char == "-":
                     uuid = uuid + uuid_char
                     self.consume_char()
