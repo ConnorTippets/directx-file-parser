@@ -8,8 +8,7 @@ class XTokenType(Enum):
     IDENT = auto()
     L_BRACKET = auto()
     R_BRACKET = auto()
-    L_ANGLE_BRACKET = auto()
-    R_ANGLE_BRACKET = auto()
+    UUID = auto()
 
 
 @dataclass
@@ -70,9 +69,19 @@ class XTextParser:
             elif char == "}":
                 self.tokens.append(XToken(XTokenType.R_BRACKET, "}"))
             elif char == "<":
-                self.tokens.append(XToken(XTokenType.L_ANGLE_BRACKET, "<"))
-            elif char == ">":
-                self.tokens.append(XToken(XTokenType.R_ANGLE_BRACKET, ">"))
+                # TODO: check if UUID is valid (ie the four parts have the right lengths or whatever)
+                uuid = ""
+                while (uuid_char := self.peek_char()).isalnum() or uuid_char == "-":
+                    uuid = uuid + uuid_char
+                    self.consume_char()
+
+                if not self.peek_char() == ">":
+                    raise ParseError(
+                        f"unexpected char '{char}' during UUID at index {self.index}"
+                    )
+
+                self.consume_char()
+                self.tokens.append(XToken(XTokenType.UUID, uuid))
             elif char.isalpha():
                 ident = char
                 while (ident_char := self.peek_char()).isalnum():
