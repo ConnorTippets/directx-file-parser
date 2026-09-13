@@ -13,6 +13,7 @@ class XTokenType(Enum):
     UUID = auto()
     SEMI = auto()
     ELLIPSIS = auto()
+    NUMBER = auto()
 
 
 @dataclass
@@ -104,10 +105,21 @@ class XTextParser:
             elif char.isalpha():
                 ident = char
                 while (ident_char := self.peek_char()).isalnum() or ident_char == "_":
-                    ident = ident + ident_char
-                    self.consume_char()
+                    ident = ident + self.consume_char()
 
                 self.tokens.append(XToken(XTokenType.IDENT, ident))
+            elif char.isdigit():
+                num = char
+                has_dot = False
+                while (num_char := self.peek_char()).isdigit() or (
+                    num_char == "." and not has_dot
+                ):
+                    if num_char == ".":
+                        has_dot = True
+
+                    num = num + self.consume_char()
+
+                self.tokens.append(XToken(XTokenType.NUMBER, num))
             elif char.isspace():
                 continue
             elif char == "#" or (char == "/" and self.peek_char() == "/"):
