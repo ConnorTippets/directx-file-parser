@@ -8,6 +8,8 @@ class XTokenType(Enum):
     IDENT = auto()
     L_BRACKET = auto()
     R_BRACKET = auto()
+    L_SQ_BRACKET = auto()
+    R_SQ_BRACKET = auto()
     UUID = auto()
     SEMI = auto()
 
@@ -71,6 +73,10 @@ class XTextParser:
                 self.tokens.append(XToken(XTokenType.L_BRACKET, "{"))
             elif char == "}":
                 self.tokens.append(XToken(XTokenType.R_BRACKET, "}"))
+            elif char == "[":
+                self.tokens.append(XToken(XTokenType.L_SQ_BRACKET, "["))
+            elif char == "]":
+                self.tokens.append(XToken(XTokenType.R_SQ_BRACKET, "]"))
             elif char == "<":
                 # TODO: check if UUID is valid (ie the four parts have the right lengths or whatever)
                 uuid = ""
