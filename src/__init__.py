@@ -6,6 +6,8 @@ from enum import Enum, auto
 class XTokenType(Enum):
     EOL = auto()
     IDENT = auto()
+    L_BRACKET = auto()
+    R_BRACKET = auto()
 
 
 @dataclass
@@ -61,7 +63,11 @@ class XTextParser:
             char = self.consume_char()
             if char == "\n":
                 self.tokens.append(XToken(XTokenType.EOL, "\n"))
-            if char.isalpha():
+            elif char == "{":
+                self.tokens.append(XToken(XTokenType.L_BRACKET, "{"))
+            elif char == "}":
+                self.tokens.append(XToken(XTokenType.R_BRACKET, "}"))
+            elif char.isalpha():
                 ident = char
                 while (ident_char := self.peek_char()).isalnum():
                     ident = ident + ident_char
