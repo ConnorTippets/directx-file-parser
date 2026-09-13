@@ -104,7 +104,7 @@ class XTextParser:
                 self.tokens.append(XToken(XTokenType.UUID, uuid))
             elif char.isalpha():
                 ident = char
-                while (ident_char := self.peek_char()).isalnum() or ident_char == "_":
+                while (ident_char := self.peek_char()).isalnum() or ident_char in "_-":
                     ident = ident + self.consume_char()
 
                 self.tokens.append(XToken(XTokenType.IDENT, ident))
