@@ -122,7 +122,7 @@ class XTextParser:
                     ident = ident + self.consume_char()
 
                 self.tokens.append(XToken(XTokenType.IDENT, ident))
-            elif char.isdigit():
+            elif char.isdigit() or (char == "-" and self.peek_char().isdigit()):
                 num = char
                 has_dot = False
                 while (num_char := self.peek_char()).isdigit() or (
