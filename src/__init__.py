@@ -10,6 +10,7 @@ class XTokenType(Enum):
     R_BRACKET = auto()
     L_SQ_BRACKET = auto()
     R_SQ_BRACKET = auto()
+    COMMA = auto()
     UUID = auto()
     SEMI = auto()
     ELLIPSIS = auto()
@@ -80,6 +81,8 @@ class XTextParser:
                 self.tokens.append(XToken(XTokenType.L_SQ_BRACKET, "["))
             elif char == "]":
                 self.tokens.append(XToken(XTokenType.R_SQ_BRACKET, "]"))
+            elif char == ",":
+                self.tokens.append(XToken(XTokenType.COMMA, ","))
             elif char == ".":
                 if self.peek_char() == "." and self.peek_char(1) == ".":
                     self.consume_char()
