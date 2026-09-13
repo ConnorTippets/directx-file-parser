@@ -12,6 +12,7 @@ class XTokenType(Enum):
     R_SQ_BRACKET = auto()
     UUID = auto()
     SEMI = auto()
+    ELLIPSIS = auto()
 
 
 @dataclass
@@ -40,9 +41,9 @@ class XTextParser:
         self.header: XHeader | None = None
         self.tokens: list[XToken] = []
 
-    def peek_char(self) -> str:
+    def peek_char(self, ahead: int = 0) -> str:
         try:
-            return self.contents[self.index]
+            return self.contents[self.index + ahead]
         except IndexError:
             return ""
 
@@ -77,6 +78,15 @@ class XTextParser:
                 self.tokens.append(XToken(XTokenType.L_SQ_BRACKET, "["))
             elif char == "]":
                 self.tokens.append(XToken(XTokenType.R_SQ_BRACKET, "]"))
+            elif char == ".":
+                if self.peek_char() == "." and self.peek_char(1) == ".":
+                    self.consume_char()
+                    self.consume_char()
+                    self.tokens.append(XToken(XTokenType.ELLIPSIS, "..."))
+                else:
+                    raise ParseError(
+                        "TODO: float values 0-1 with leading zero removed (.5)"
+                    )
             elif char == "<":
                 # TODO: check if UUID is valid (ie the four parts have the right lengths or whatever)
                 uuid = ""
