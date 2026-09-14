@@ -256,8 +256,15 @@ class XTextParser:
                 if not self.peek().type is XTokenType.R_SQ_BRACKET:
                     raise ParseError(f"expected ']' at {self.peek().idx}")
                 self.consume()
-                if not self.peek().type is XTokenType.R_BRACKET:
-                    raise ParseError(f"expected '}}' at {self.peek().idx}")
+
+                r_brack = self.peek()
+                while r_brack.type is XTokenType.EOL:
+                    self.consume()
+                    r_brack = self.peek()
+
+                if not (r_brack := self.peek()).type is XTokenType.R_BRACKET:
+                    raise ParseError(f"expected '}}' at {r_brack.idx}")
+
                 self.consume()
 
                 self.templates[name] = XTemplateDefinition(
