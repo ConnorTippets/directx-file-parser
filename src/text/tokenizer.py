@@ -73,7 +73,6 @@ class XTextTokenizer:
                 if self.peek(1) == "." and self.peek(2) == ".":
                     self.consume()
                     self.consume()
-                    self.consume()
                     self.tokens.append(XToken(XTokenType.ELLIPSIS, "...", self.index))
                 elif self.peek(1).isdigit():
                     # This case is handled below
