@@ -17,13 +17,14 @@ class XFileLoader:
         except ParseError:
             print(tokenizer.tokens)
             raise
-        print(" ".join([tok.val.replace("EOL", "\n") for tok in tokenizer.tokens[:64]]))
 
         parser = XTextParser()
         try:
             file = parser.parse(tokens)
         except ParseError:
-            print(parser.file)
+            from pprint import pprint as print
+
+            print(parser.templates)
             raise
 
         return file

@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from uuid import UUID
 
 from .tokenizer import XToken, XTokenType
 from ..models import XFile, ParseError
@@ -39,11 +40,26 @@ class XTemplateMemberDefinition:
     dimensions: list[XToken] = field(default_factory=list)
 
 
+class XRestrictionType(Enum):
+    OPEN = auto()
+    CLOSED = auto()
+    RESTRICTED = auto()
+
+
+@dataclass
+class XTemplateDefinition:
+    type: XRestrictionType
+    name: str
+    uuid: UUID
+    members: list[XTemplateMemberDefinition]
+
+
 class XTextParser:
     def __init__(self):
         self.index = 0
         self.tokens: list[XToken] = []
         self.file: XFile = XFile()
+        self.templates: dict[str, XTemplateDefinition] = {}
 
     def peek(self) -> XToken:
         try:
@@ -173,7 +189,6 @@ class XTextParser:
     def try_parse_template_def(self):
         tok = self.peek()
         if tok.type == XTokenType.IDENT and tok.val == "template":
-            print("parsing template")
             self.consume()
 
             if not (name_tok := self.peek()).type == XTokenType.IDENT:
@@ -182,7 +197,11 @@ class XTextParser:
                 )
 
             name = self.consume().val
-            print(f"template name is {name}")
+
+            if name in self.templates:
+                raise ParseError(
+                    f"reinstantiation of template `{name}` at {name_tok.idx} is not allowed"
+                )
 
             if not (l_brack := self.peek()).type == XTokenType.L_BRACKET:
                 raise ParseError(
@@ -204,7 +223,6 @@ class XTextParser:
                 )
 
             uuid = self.consume().val
-            print(f"template uuid is {uuid}")
 
             if not (newline := self.peek()).type == XTokenType.EOL:
                 raise ParseError(
@@ -213,12 +231,25 @@ class XTextParser:
 
             self.consume()
 
-            member_one = self.parse_template_def_member()
-            print(member_one)
+            members: list[XTemplateMemberDefinition] = []
+            while not self.peek().type in (
+                XTokenType.EOF,
+                XTokenType.L_SQ_BRACKET,
+                XTokenType.R_BRACKET,
+            ):
+                members.append(self.parse_template_def_member())
 
-            member_one = self.parse_template_def_member()
-            print(member_one)
-            breakpoint()
+            if (eof := self.peek()).type == XTokenType.EOF:
+                raise ParseError(f"unexpected EOF during template def at {eof.idx}")
+
+            if self.peek().type == XTokenType.R_BRACKET:
+                self.consume()
+
+                self.templates[name] = XTemplateDefinition(
+                    XRestrictionType.CLOSED, name, UUID(uuid), members
+                )
+            else:
+                raise ParseError("TODO: open/restricted templates")
 
         while not self.peek().type in (XTokenType.EOL, XTokenType.EOF):
             self.consume()
@@ -230,6 +261,7 @@ class XTextParser:
         self.index = 0
         self.tokens = tokens
         self.file = XFile()
+        self.templates: dict[str, XTemplateDefinition] = {}
 
         while not self.peek().type == XTokenType.EOF:
             self.try_parse_template_def()
