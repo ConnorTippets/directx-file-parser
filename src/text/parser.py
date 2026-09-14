@@ -34,7 +34,7 @@ DATA_TYPES = [
 @dataclass
 class XTemplateMemberDefinition:
     is_arr: bool
-    type: XDataType
+    type: XDataType | str
     name: str = ""
     dimensions: list[XToken] = field(default_factory=list)
 
@@ -147,8 +147,28 @@ class XTextParser:
                 True, getattr(XDataType, typ), name, dim_sizes
             )
         else:
-            print("todo: non-array members")
-            breakpoint()
+            if not (name_tok := self.peek()).type in (
+                XTokenType.IDENT,
+                XTokenType.SEMI,
+            ):
+                raise ParseError(
+                    f"`{name_tok}` at index {name_tok.idx} is not a valid member name"
+                )
+
+            name = ""
+            if name_tok.type == XTokenType.IDENT:
+                name = self.consume().val
+
+                if not self.peek().type == XTokenType.SEMI:
+                    raise ParseError(f"expected ';' after member name")
+
+            # when semi colon
+            self.consume()
+
+            if self.peek().type == XTokenType.EOL:
+                self.consume()
+
+            return XTemplateMemberDefinition(False, getattr(XDataType, typ), name)
 
     def try_parse_template_def(self):
         tok = self.peek()
@@ -192,6 +212,9 @@ class XTextParser:
                 )
 
             self.consume()
+
+            member_one = self.parse_template_def_member()
+            print(member_one)
 
             member_one = self.parse_template_def_member()
             print(member_one)
