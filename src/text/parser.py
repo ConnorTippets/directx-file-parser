@@ -178,7 +178,7 @@ class XTextParser:
                 name = self.consume().val
 
                 if not self.peek().type is XTokenType.SEMI:
-                    raise ParseError(f"expected ';' after member name")
+                    raise ParseError(f"expected ';' at {self.peek().idx}")
 
             # when semi colon
             self.consume()
@@ -243,17 +243,28 @@ class XTextParser:
             ):
                 members.append(self.parse_template_def_member())
 
-            if (eof := self.peek()).type is XTokenType.EOF:
-                raise ParseError(f"unexpected EOF during template def at {eof.idx}")
+            if (tok := self.peek()).type is XTokenType.EOF:
+                raise ParseError(f"unexpected EOF during template def at {tok.idx}")
 
-            if self.peek().type is XTokenType.R_BRACKET:
-                self.consume()
-
+            self.consume()
+            if tok.type is XTokenType.R_BRACKET:
                 self.templates[name] = XTemplateDefinition(
                     XRestrictionType.CLOSED, name, UUID(uuid), members
                 )
+            elif self.peek().type is XTokenType.ELLIPSIS:
+                self.consume()
+                if not self.peek().type is XTokenType.R_SQ_BRACKET:
+                    raise ParseError(f"expected ']' at {self.peek().idx}")
+                self.consume()
+                if not self.peek().type is XTokenType.R_BRACKET:
+                    raise ParseError(f"expected '}}' at {self.peek().idx}")
+                self.consume()
+
+                self.templates[name] = XTemplateDefinition(
+                    XRestrictionType.OPEN, name, UUID(uuid), members
+                )
             else:
-                raise ParseError("TODO: open/restricted templates")
+                raise ParseError("TODO: restricted templates")
 
         while not self.peek().type in (XTokenType.EOL, XTokenType.EOF):
             self.consume()
