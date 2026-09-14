@@ -77,23 +77,25 @@ class XTextParser:
 
     def parse_template_def_member(self) -> XTemplateMemberDefinition:
         if (not (type_tok := self.peek()).type is XTokenType.IDENT) or (
-            not type_tok.val in DATA_TYPES + ["array"]
+            not type_tok.val in DATA_TYPES + ["array"] + list(self.templates.keys())
         ):
             raise ParseError(
                 f"`{type_tok.val}` at index {type_tok.idx} is not a valid data type"
             )
 
         typ = self.consume().val
+        is_template = typ in self.templates
 
         if typ == "array":
             if (not (type_tok := self.peek()).type is XTokenType.IDENT) or (
-                not type_tok.val in DATA_TYPES
+                not type_tok.val in DATA_TYPES + list(self.templates.keys())
             ):
                 raise ParseError(
                     f"`{type_tok.val}` at index {type_tok.idx} is not a valid data type"
                 )
 
             typ = self.consume().val
+            is_template = typ in self.templates
 
             if not (name_or_size_tok := self.peek()).type in (
                 XTokenType.IDENT,
@@ -160,7 +162,7 @@ class XTextParser:
                 self.consume()
 
             return XTemplateMemberDefinition(
-                True, getattr(XDataType, typ), name, dim_sizes
+                True, typ if is_template else getattr(XDataType, typ), name, dim_sizes
             )
         else:
             if not (name_tok := self.peek()).type in (
@@ -184,7 +186,9 @@ class XTextParser:
             if self.peek().type is XTokenType.EOL:
                 self.consume()
 
-            return XTemplateMemberDefinition(False, getattr(XDataType, typ), name)
+            return XTemplateMemberDefinition(
+                False, typ if is_template else getattr(XDataType, typ), name
+            )
 
     def try_parse_template_def(self):
         tok = self.peek()
