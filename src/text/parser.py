@@ -1,6 +1,42 @@
-from .tokenizer import XToken, XTokenType
+from dataclasses import dataclass, field
+from enum import Enum, auto
 
+from .tokenizer import XToken, XTokenType
 from ..models import XFile, ParseError
+
+
+class XDataType(Enum):
+    WORD = auto()
+    DWORD = auto()
+    FLOAT = auto()
+    DOUBLE = auto()
+    CHAR = auto()
+    UCHAR = auto()
+    BYTE = auto()
+    STRING = auto()
+
+
+#     CSTRING = auto()
+#     UNICODE = auto()
+
+DATA_TYPES = [
+    "WORD",
+    "DWORD",
+    "FLOAT",
+    "DOUBLE",
+    "CHAR",
+    "UCHAR",
+    "BYTE",
+    "STRING",
+]  # , "CSTRING", "UNICODE"]
+
+
+@dataclass
+class XTemplateMemberDefinition:
+    is_arr: bool
+    type: XDataType
+    name: str = ""
+    dimensions: list[XToken] = field(default_factory=list)
 
 
 class XTextParser:
@@ -13,7 +49,7 @@ class XTextParser:
         try:
             return self.tokens[self.index]
         except IndexError:
-            return XToken(XTokenType.EOF, "", self.index)
+            return XToken(XTokenType.EOF, "EOF", self.index)
 
     def consume(self) -> XToken:
         try:
@@ -21,7 +57,98 @@ class XTextParser:
             self.index += 1
             return token
         except IndexError:
-            return XToken(XTokenType.EOF, "", self.index)
+            return XToken(XTokenType.EOF, "EOF", self.index)
+
+    def parse_template_def_member(self) -> XTemplateMemberDefinition:
+        if (not (type_tok := self.peek()).type == XTokenType.IDENT) or (
+            not type_tok.val in DATA_TYPES + ["array"]
+        ):
+            raise ParseError(
+                f"`{type_tok.val}` at index {type_tok.idx} is not a valid data type"
+            )
+
+        typ = self.consume().val
+
+        if typ == "array":
+            if (not (type_tok := self.peek()).type == XTokenType.IDENT) or (
+                not type_tok.val in DATA_TYPES
+            ):
+                raise ParseError(
+                    f"`{type_tok.val}` at index {type_tok.idx} is not a valid data type"
+                )
+
+            typ = self.consume().val
+
+            if not (name_or_size_tok := self.peek()).type in (
+                XTokenType.IDENT,
+                XTokenType.L_SQ_BRACKET,
+            ):
+                if name_or_size_tok.type == XTokenType.SEMI:
+                    raise ParseError("arrays must have a size")
+                raise ParseError(
+                    f"`{name_or_size_tok.val}` at index {name_or_size_tok.idx} is not a valid array name/size"
+                )
+
+            name = ""
+            if name_or_size_tok.type == XTokenType.IDENT:
+                name = self.consume().val
+
+                if (
+                    not (name_or_size_tok := self.peek()).type
+                    == XTokenType.L_SQ_BRACKET
+                ):
+                    if name_or_size_tok.type == XTokenType.SEMI:
+                        raise ParseError("arrays must have a size")
+                    raise ParseError(
+                        f"`{name_or_size_tok.val}` at index {name_or_size_tok.idx} is not a valid array size"
+                    )
+
+            dim_sizes: list[XToken] = []
+            while not self.peek().type in (XTokenType.EOF, XTokenType.SEMI):
+                if not (l_sq_brack := self.peek()).type == XTokenType.L_SQ_BRACKET:
+                    raise ParseError(
+                        f"expected '[' during member def at {l_sq_brack.idx}, got `{l_sq_brack.val}`"
+                    )
+
+                self.consume()
+
+                if not (dim_size_tok := self.peek()).type in (
+                    XTokenType.NUMBER,
+                    XTokenType.IDENT,
+                ):
+                    raise ParseError(
+                        f"`{dim_size_tok.val}` at index {dim_size_tok.idx} is not a valid array dimension size"
+                    )
+
+                dim_size = self.consume().val
+
+                if dim_size_tok.type == XTokenType.NUMBER and "-." in dim_size:
+                    raise ParseError(
+                        f"`{dim_size}` at index {dim_size_tok.idx} is not a valid array dimension size"
+                    )
+
+                if not (r_sq_brack := self.peek()).type == XTokenType.R_SQ_BRACKET:
+                    raise ParseError(
+                        f"expected '[' during member def at {r_sq_brack.idx}, got `{r_sq_brack.val}`"
+                    )
+
+                self.consume()
+                dim_sizes.append(dim_size_tok)
+
+            if (semi := self.peek()).type == XTokenType.EOF:
+                raise ParseError(f"unexpected EOF during member def at {semi.idx}")
+
+            self.consume()
+
+            if self.peek().type == XTokenType.EOL:
+                self.consume()
+
+            return XTemplateMemberDefinition(
+                True, getattr(XDataType, typ), name, dim_sizes
+            )
+        else:
+            print("todo: non-array members")
+            breakpoint()
 
     def try_parse_template_def(self):
         tok = self.peek()
@@ -58,6 +185,16 @@ class XTextParser:
 
             uuid = self.consume().val
             print(f"template uuid is {uuid}")
+
+            if not (newline := self.peek()).type == XTokenType.EOL:
+                raise ParseError(
+                    f"expected newline during template def at {newline.idx}, got `{newline.val}`"
+                )
+
+            self.consume()
+
+            member_one = self.parse_template_def_member()
+            print(member_one)
             breakpoint()
 
         while not self.peek().type in (XTokenType.EOL, XTokenType.EOF):
