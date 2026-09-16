@@ -33,7 +33,7 @@ DATA_TYPES = [
 
 
 @dataclass
-class XTemplateMemberDefinition:
+class XTemplateMember:
     is_arr: bool
     type: XDataType | str
     name: str = ""
@@ -47,11 +47,18 @@ class XRestrictionType(Enum):
 
 
 @dataclass
-class XTemplateDefinition:
+class XTemplateRestriction:
+    template: str
+    uuid: UUID = UUID(int=0)
+
+
+@dataclass
+class XTemplate:
     type: XRestrictionType
     name: str
     uuid: UUID
-    members: list[XTemplateMemberDefinition]
+    members: list[XTemplateMember]
+    restrictions: list[XTemplateRestriction]
 
 
 class XTextParser:
@@ -59,7 +66,7 @@ class XTextParser:
         self.index = 0
         self.tokens: list[XToken] = []
         self.file: XFile = XFile()
-        self.templates: dict[str, XTemplateDefinition] = {}
+        self.templates: dict[str, XTemplate] = {}
 
     def peek(self) -> XToken:
         try:
@@ -75,7 +82,7 @@ class XTextParser:
         except IndexError:
             return XToken(XTokenType.EOF, "EOF", self.index)
 
-    def parse_template_def_member(self) -> XTemplateMemberDefinition:
+    def parse_template_def_member(self) -> XTemplateMember:
         if (not (type_tok := self.peek()).type is XTokenType.IDENT) or (
             not type_tok.val in DATA_TYPES + ["array"] + list(self.templates.keys())
         ):
@@ -158,7 +165,7 @@ class XTextParser:
 
             self.consume()
 
-            return XTemplateMemberDefinition(
+            return XTemplateMember(
                 True, typ if is_template else getattr(XDataType, typ), name, dim_sizes
             )
         else:
@@ -180,7 +187,7 @@ class XTextParser:
             # when semi colon
             self.consume()
 
-            return XTemplateMemberDefinition(
+            return XTemplateMember(
                 False, typ if is_template else getattr(XDataType, typ), name
             )
 
@@ -215,7 +222,7 @@ class XTextParser:
 
             uuid = self.consume().val
 
-            members: list[XTemplateMemberDefinition] = []
+            members: list[XTemplateMember] = []
             while not self.peek().type in (
                 XTokenType.EOF,
                 XTokenType.L_SQ_BRACKET,
@@ -228,20 +235,52 @@ class XTextParser:
 
             self.consume()
             if tok.type is XTokenType.R_BRACKET:
-                self.templates[name] = XTemplateDefinition(
-                    XRestrictionType.CLOSED, name, UUID(uuid), members
+                self.templates[name] = XTemplate(
+                    XRestrictionType.CLOSED, name, UUID(uuid), members, []
                 )
             else:
-                if self.peek().type is XTokenType.ELLIPSIS:
+                tok = self.peek()
+                restrictions: list[XTemplateRestriction] = []
+
+                if tok.type is XTokenType.ELLIPSIS:
                     restrict_type = XRestrictionType.OPEN
                     self.consume()
-                elif self.peek().type is XTokenType.IDENT:
+                elif tok.type is XTokenType.IDENT:
                     restrict_type = XRestrictionType.RESTRICTED
 
-                    print(self.peek())
-                    breakpoint()
-                    # while self.peek():
-                    #     # TODO: finish this~!!
+                    while not tok.type in (XTokenType.R_SQ_BRACKET, XTokenType.EOF):
+                        templ_name = self.consume().val
+                        next_tok = self.peek()
+
+                        templ_uuid = ""
+                        if next_tok.type is XTokenType.UUID:
+                            templ_uuid = self.consume().val
+                            next_tok = self.peek()
+
+                        if next_tok.type is XTokenType.R_SQ_BRACKET:
+                            if templ_uuid:
+                                restrictions.append(
+                                    XTemplateRestriction(templ_name, UUID(templ_uuid))
+                                )
+                            else:
+                                restrictions.append(XTemplateRestriction(templ_name))
+
+                            break
+                        elif next_tok.type is XTokenType.COMMA:
+                            self.consume()
+                        else:
+                            raise ParseError(
+                                f"unexpected token `{next_tok.val}` during restriction def at {next_tok.idx}"
+                            )
+
+                        if templ_uuid:
+                            restrictions.append(
+                                XTemplateRestriction(templ_name, UUID(templ_uuid))
+                            )
+                        else:
+                            restrictions.append(XTemplateRestriction(templ_name))
+
+                        tok = self.peek()
                 else:
                     raise ParseError(
                         f"unexpected token `{self.peek().val}` during restriction def at {self.peek().idx}"
@@ -256,15 +295,15 @@ class XTextParser:
 
                 self.consume()
 
-                self.templates[name] = XTemplateDefinition(
-                    restrict_type, name, UUID(uuid), members
+                self.templates[name] = XTemplate(
+                    restrict_type, name, UUID(uuid), members, restrictions
                 )
 
     def parse(self, tokens: list[XToken]) -> XFile:
         self.index = 0
         self.tokens = tokens
         self.file = XFile()
-        self.templates: dict[str, XTemplateDefinition] = {}
+        self.templates: dict[str, XTemplate] = {}
 
         while not self.peek().type is XTokenType.EOF:
             self.try_parse_template_def()
