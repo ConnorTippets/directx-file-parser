@@ -5,7 +5,6 @@ from ..models import ParseError
 
 
 class XTokenType(Enum):
-    EOL = auto()
     EOF = auto()
     IDENT = auto()
     L_BRACKET = auto()
@@ -55,9 +54,7 @@ class XTextTokenizer:
         self.tokens = []
 
         while char := self.peek():
-            if char == "\n":
-                self.tokens.append(XToken(XTokenType.EOL, "EOL", self.index))
-            elif char == ";":
+            if char == ";":
                 self.tokens.append(XToken(XTokenType.SEMI, ";", self.index))
             elif char == "{":
                 self.tokens.append(XToken(XTokenType.L_BRACKET, "{", self.index))

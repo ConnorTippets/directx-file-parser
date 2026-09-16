@@ -158,9 +158,6 @@ class XTextParser:
 
             self.consume()
 
-            if self.peek().type is XTokenType.EOL:
-                self.consume()
-
             return XTemplateMemberDefinition(
                 True, typ if is_template else getattr(XDataType, typ), name, dim_sizes
             )
@@ -182,9 +179,6 @@ class XTextParser:
 
             # when semi colon
             self.consume()
-
-            if self.peek().type is XTokenType.EOL:
-                self.consume()
 
             return XTemplateMemberDefinition(
                 False, typ if is_template else getattr(XDataType, typ), name
@@ -214,26 +208,12 @@ class XTextParser:
 
             self.consume()
 
-            if not (newline := self.peek()).type is XTokenType.EOL:
-                raise ParseError(
-                    f"expected newline during template def at {newline.idx}, got `{newline.val}`"
-                )
-
-            self.consume()
-
             if not (uuid_tok := self.peek()).type is XTokenType.UUID:
                 raise ParseError(
                     f"expected UUID during template def at {uuid_tok.idx}, got `{uuid_tok.val}`"
                 )
 
             uuid = self.consume().val
-
-            if not (newline := self.peek()).type is XTokenType.EOL:
-                raise ParseError(
-                    f"expected newline during template def at {newline.idx}, got `{newline.val}`"
-                )
-
-            self.consume()
 
             members: list[XTemplateMemberDefinition] = []
             while not self.peek().type in (
@@ -251,16 +231,25 @@ class XTextParser:
                 self.templates[name] = XTemplateDefinition(
                     XRestrictionType.CLOSED, name, UUID(uuid), members
                 )
-            elif self.peek().type is XTokenType.ELLIPSIS:
-                self.consume()
+            else:
+                if self.peek().type is XTokenType.ELLIPSIS:
+                    restrict_type = XRestrictionType.OPEN
+                    self.consume()
+                elif self.peek().type is XTokenType.IDENT:
+                    restrict_type = XRestrictionType.RESTRICTED
+
+                    print(self.peek())
+                    breakpoint()
+                    # while self.peek():
+                    #     # TODO: finish this~!!
+                else:
+                    raise ParseError(
+                        f"unexpected token `{self.peek().val}` during restriction def at {self.peek().idx}"
+                    )
+
                 if not self.peek().type is XTokenType.R_SQ_BRACKET:
                     raise ParseError(f"expected ']' at {self.peek().idx}")
                 self.consume()
-
-                r_brack = self.peek()
-                while r_brack.type is XTokenType.EOL:
-                    self.consume()
-                    r_brack = self.peek()
 
                 if not (r_brack := self.peek()).type is XTokenType.R_BRACKET:
                     raise ParseError(f"expected '}}' at {r_brack.idx}")
@@ -268,16 +257,8 @@ class XTextParser:
                 self.consume()
 
                 self.templates[name] = XTemplateDefinition(
-                    XRestrictionType.OPEN, name, UUID(uuid), members
+                    restrict_type, name, UUID(uuid), members
                 )
-            else:
-                raise ParseError("TODO: restricted templates")
-
-        while not self.peek().type in (XTokenType.EOL, XTokenType.EOF):
-            self.consume()
-
-        if self.peek().type is XTokenType.EOL:
-            self.consume()
 
     def parse(self, tokens: list[XToken]) -> XFile:
         self.index = 0
