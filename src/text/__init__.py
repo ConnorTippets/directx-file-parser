@@ -2,6 +2,8 @@ from ..models import XHeader, XFile, ParseError
 from .tokenizer import XTextTokenizer
 from .parser import XTextParser
 
+from pprint import pprint as print
+
 
 class XFileLoader:
     def __init__(self):
@@ -19,12 +21,8 @@ class XFileLoader:
             raise
 
         parser = XTextParser()
-        try:
-            file = parser.parse(tokens)
-        except ParseError:
-            from pprint import pprint as print
+        file = parser.parse(tokens)
 
-            print(parser.templates)
-            raise
+        print(parser.templates)
 
         return file

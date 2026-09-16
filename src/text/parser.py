@@ -191,7 +191,7 @@ class XTextParser:
                 False, typ if is_template else getattr(XDataType, typ), name
             )
 
-    def try_parse_template_def(self):
+    def try_parse_template_def(self) -> bool:
         tok = self.peek()
         if tok.type is XTokenType.IDENT and tok.val == "template":
             self.consume()
@@ -299,6 +299,9 @@ class XTextParser:
                     restrict_type, name, UUID(uuid), members, restrictions
                 )
 
+            return True
+        return False
+
     def parse(self, tokens: list[XToken]) -> XFile:
         self.index = 0
         self.tokens = tokens
@@ -306,4 +309,10 @@ class XTextParser:
         self.templates: dict[str, XTemplate] = {}
 
         while not self.peek().type is XTokenType.EOF:
-            self.try_parse_template_def()
+            if not self.try_parse_template_def():
+                # not a template def...
+                # there's not much we can do here except consume the nearest `}`
+
+                while not self.peek().type in (XTokenType.R_BRACKET, XTokenType.EOF):
+                    self.consume()
+                self.consume()
