@@ -132,7 +132,7 @@ class XTextParser:
             while not self.peek().type in (XTokenType.EOF, XTokenType.SEMI):
                 if not (l_sq_brack := self.peek()).type is XTokenType.L_SQ_BRACKET:
                     raise ParseError(
-                        f"expected '[' during member def at {l_sq_brack.idx}, got `{l_sq_brack.val}`"
+                        f"expected '[' during member def at idx {l_sq_brack.idx}, got `{l_sq_brack.val}`"
                     )
 
                 self.consume()
@@ -154,14 +154,14 @@ class XTextParser:
 
                 if not (r_sq_brack := self.peek()).type is XTokenType.R_SQ_BRACKET:
                     raise ParseError(
-                        f"expected '[' during member def at {r_sq_brack.idx}, got `{r_sq_brack.val}`"
+                        f"expected '[' during member def at idx {r_sq_brack.idx}, got `{r_sq_brack.val}`"
                     )
 
                 self.consume()
                 dim_sizes.append(dim_size_tok)
 
             if (semi := self.peek()).type is XTokenType.EOF:
-                raise ParseError(f"unexpected EOF during member def at {semi.idx}")
+                raise ParseError(f"unexpected EOF during member def at idx {semi.idx}")
 
             self.consume()
 
@@ -182,7 +182,7 @@ class XTextParser:
                 name = self.consume().val
 
                 if not self.peek().type is XTokenType.SEMI:
-                    raise ParseError(f"expected ';' at {self.peek().idx}")
+                    raise ParseError(f"expected ';' at idx {self.peek().idx}")
 
             # when semi colon
             self.consume()
@@ -205,19 +205,19 @@ class XTextParser:
 
             if name in self.templates:
                 raise ParseError(
-                    f"reinstantiation of template `{name}` at {name_tok.idx} is not allowed"
+                    f"reinstantiation of template `{name}` at idx {name_tok.idx} is not allowed"
                 )
 
             if not (l_brack := self.peek()).type is XTokenType.L_BRACKET:
                 raise ParseError(
-                    f"expected '{{' during template def at {l_brack.idx}, got `{l_brack.val}`"
+                    f"expected '{{' during template def at idx {l_brack.idx}, got `{l_brack.val}`"
                 )
 
             self.consume()
 
             if not (uuid_tok := self.peek()).type is XTokenType.UUID:
                 raise ParseError(
-                    f"expected UUID during template def at {uuid_tok.idx}, got `{uuid_tok.val}`"
+                    f"expected UUID during template def at idx {uuid_tok.idx}, got `{uuid_tok.val}`"
                 )
 
             uuid = self.consume().val
@@ -231,7 +231,7 @@ class XTextParser:
                 members.append(self.parse_template_def_member())
 
             if (tok := self.peek()).type is XTokenType.EOF:
-                raise ParseError(f"unexpected EOF during template def at {tok.idx}")
+                raise ParseError(f"unexpected EOF during template def at idx {tok.idx}")
 
             self.consume()
             if tok.type is XTokenType.R_BRACKET:
@@ -270,7 +270,7 @@ class XTextParser:
                             self.consume()
                         else:
                             raise ParseError(
-                                f"unexpected token `{next_tok.val}` during restriction def at {next_tok.idx}"
+                                f"unexpected token `{next_tok.val}` during restriction def at idx {next_tok.idx}"
                             )
 
                         if templ_uuid:
@@ -283,15 +283,15 @@ class XTextParser:
                         tok = self.peek()
                 else:
                     raise ParseError(
-                        f"unexpected token `{self.peek().val}` during restriction def at {self.peek().idx}"
+                        f"unexpected token `{self.peek().val}` during restriction def at idx {self.peek().idx}"
                     )
 
                 if not self.peek().type is XTokenType.R_SQ_BRACKET:
-                    raise ParseError(f"expected ']' at {self.peek().idx}")
+                    raise ParseError(f"expected ']' at idx {self.peek().idx}")
                 self.consume()
 
                 if not (r_brack := self.peek()).type is XTokenType.R_BRACKET:
-                    raise ParseError(f"expected '}}' at {r_brack.idx}")
+                    raise ParseError(f"expected '}}' at idx {r_brack.idx}")
 
                 self.consume()
 
@@ -315,4 +315,4 @@ class XTextParser:
             if not self.try_parse_template_def():
                 if not self.try_parse_data():
                     # not a template or data, it's probably invalid then
-                    raise ParseError(f"unknown expression at {self.peek().idx}")
+                    raise ParseError(f"unknown expression at idx {self.peek().idx}")
