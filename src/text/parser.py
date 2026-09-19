@@ -302,6 +302,9 @@ class XTextParser:
             return True
         return False
 
+    def try_parse_data(self) -> bool:
+        return False
+
     def parse(self, tokens: list[XToken]) -> XFile:
         self.index = 0
         self.tokens = tokens
@@ -310,9 +313,6 @@ class XTextParser:
 
         while not self.peek().type is XTokenType.EOF:
             if not self.try_parse_template_def():
-                # not a template def...
-                # there's not much we can do here except consume the nearest `}`
-
-                while not self.peek().type in (XTokenType.R_BRACKET, XTokenType.EOF):
-                    self.consume()
-                self.consume()
+                if not self.try_parse_data():
+                    # not a template or data, it's probably invalid then
+                    raise ParseError(f"unknown expression at {self.peek().idx}")
