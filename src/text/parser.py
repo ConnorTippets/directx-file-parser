@@ -66,8 +66,9 @@ type XDataField = float | str | list[float] | list[str] | dict[str, XDataField]
 
 @dataclass
 class XData:
+    templ: str
     name: str
-    uuid: UUID
+    uuid: UUID | None
     fields: dict[str, XDataField]
 
 
@@ -77,7 +78,7 @@ class XTextParser:
         self.tokens: list[XToken] = []
         self.file: XFile = XFile()
         self.templates: dict[str, XTemplate] = {}
-        self.data: dict[str, XData] = {}
+        self.data: list[XData] = []
 
     def peek(self) -> XToken:
         try:
@@ -391,11 +392,9 @@ class XTextParser:
         else:
             raise RuntimeError("unreachable")
 
-    def parse_members_of(self, template: XTemplate) -> XDataField:
+    def parse_members_of(self, template: XTemplate) -> dict[str, XDataField]:
         parsed_members: dict[str, XDataField] = {}
         for member in template.members:
-            print(member)
-
             elements = 1
             if member.is_arr:
                 if not len(member.dimensions) == 1:
@@ -432,11 +431,8 @@ class XTextParser:
 
                 elements = int(elements)
 
-            print(elements)
-
             parsed_elems = []
             for i in range(elements):
-                print(member.type)
                 if member.type in self.templates:
                     if not isinstance(member.type, str):
                         raise RuntimeError("unreachable")
@@ -446,8 +442,6 @@ class XTextParser:
                     )
                 else:
                     parsed_elems.append(self.parse_data_member_atom())
-
-                print(parsed_elems)
 
                 if i < elements - 1:
                     if not (tok := self.peek()).type is XTokenType.COMMA:
@@ -469,7 +463,7 @@ class XTextParser:
 
         return parsed_members
 
-    def try_parse_data(self) -> XData | None:
+    def try_parse_data(self) -> bool:
         tok = self.peek()
         if tok.type is XTokenType.IDENT:
             if tok.val in self.templates:
@@ -485,7 +479,7 @@ class XTextParser:
 
                 name = ""
                 if name_tok.type is XTokenType.IDENT:
-                    name = self.consume()
+                    name = self.consume().val
 
                 if not self.peek().type is XTokenType.L_BRACKET:
                     raise ParseError(
@@ -499,19 +493,32 @@ class XTextParser:
                     uuid = self.consume().val
 
                 members = self.parse_members_of(self.templates[tok.val])
-                print(members)
-                exit()
+
+                if not self.peek().type is XTokenType.R_BRACKET:
+                    raise ParseError("todo")
+
+                self.consume()
+
+                self.data.append(
+                    XData(tok.val, name, UUID(uuid) if uuid else None, members)
+                )
+                print(self.data[-1])
+
+                return True
             else:
                 raise ParseError(f"undefined template `{tok.val}` at idx {tok.idx}")
+
+        return False
 
     def parse(self, tokens: list[XToken]) -> XFile:
         self.index = 0
         self.tokens = tokens
         self.file = XFile()
         self.templates: dict[str, XTemplate] = {}
+        self.data: list[XData] = []
 
         while not self.peek().type is XTokenType.EOF:
             if not self.try_parse_template_def():
-                if self.try_parse_data() is None:
+                if not self.try_parse_data():
                     # not a template or data, it's probably invalid then
                     raise ParseError(f"unknown expression at idx {self.peek().idx}")
