@@ -61,12 +61,23 @@ class XTemplate:
     restrictions: list[XTemplateRestriction]
 
 
+type XDataField = float | str | list[float] | list[str] | dict[str, XDataField]
+
+
+@dataclass
+class XData:
+    name: str
+    uuid: UUID
+    fields: dict[str, XDataField]
+
+
 class XTextParser:
     def __init__(self):
         self.index = 0
         self.tokens: list[XToken] = []
         self.file: XFile = XFile()
         self.templates: dict[str, XTemplate] = {}
+        self.data: dict[str, XData] = {}
 
     def peek(self) -> XToken:
         try:
@@ -302,8 +313,196 @@ class XTextParser:
             return True
         return False
 
-    def try_parse_data(self) -> bool:
-        return False
+    def parse_data_member_atom(self) -> float | str:
+        tok = self.peek()
+        if not tok.type in (
+            XTokenType.IDENT,
+            XTokenType.L_BRACKET,
+            XTokenType.NUMBER,
+            XTokenType.STRING,
+        ):
+            raise ParseError(f"invalid data member at idx {tok.idx}")
+
+        #         if tok.type is XTokenType.IDENT:
+        #             # nested data definition
+        #
+        #             out = self.try_parse_data()
+        #             if out is None:
+        #                 raise RuntimeError("unreachable")
+        #             return out
+        #         elif tok.type is XTokenType.L_BRACKET:
+        #             # reference to previous data definition
+        #
+        #             self.consume()
+        #             if not (tok := self.peek()).type in (XTokenType.IDENT, XTokenType.UUID):
+        #                 raise ParseError(
+        #                     f"unexpected token `{tok.val}` during data ref at idx {tok.idx}"
+        #                 )
+        #
+        #             ref_name = ""
+        #             if tok.type is XTokenType.IDENT:
+        #                 ref_name = self.consume().val
+        #                 tok = self.peek()
+        #
+        #             if not tok.type in (XTokenType.UUID, XTokenType.R_BRACKET):
+        #                 raise ParseError(
+        #                     f"unexpected token `{tok.val}` during data ref at idx {tok.idx}"
+        #                 )
+        #
+        #             ref_uuid = ""
+        #             if tok.type is XTokenType.UUID:
+        #                 ref_uuid = self.consume().val
+        #                 tok = self.peek()
+        #
+        #             if tok.type is XTokenType.R_BRACKET:
+        #                 self.consume()
+        #             else:
+        #                 raise ParseError(
+        #                     f"unexpected token `{tok.val}` during data ref at idx {tok.idx}"
+        #                 )
+        #
+        #             if ref_name and ref_uuid:
+        #                 if ref_name in self.data and str(self.data[ref_name].uuid) == ref_uuid:
+        #                     return self.data[ref_name]
+        #                 else:
+        #                     raise ParseError(
+        #                         f"undefined data object `{ref_name}` with uuid `{ref_uuid}` at idx {tok.idx}"
+        #                     )
+        #             elif ref_name:
+        #                 if ref_name in self.data:
+        #                     return self.data[ref_name]
+        #                 else:
+        #                     raise ParseError(
+        #                         f"undefined data object `{ref_name}` at idx {tok.idx}"
+        #                     )
+        #             elif ref_uuid:
+        #                 for data_object in self.data.values():
+        #                     if str(data_object.uuid) == ref_uuid:
+        #                         return data_object
+        #                 raise ParseError(f"undefined data object `{ref_uuid}` at idx {tok.idx}")
+        #             else:
+        #                 raise RuntimeError("unreachable")
+        if tok.type is XTokenType.NUMBER:
+            self.consume()
+            return float(tok.val)
+        elif tok.type is XTokenType.STRING:
+            self.consume()
+            return tok.val
+        else:
+            raise RuntimeError("unreachable")
+
+    def parse_members_of(self, template: XTemplate) -> XDataField:
+        parsed_members: dict[str, XDataField] = {}
+        for member in template.members:
+            print(member)
+
+            elements = 1
+            if member.is_arr:
+                if not len(member.dimensions) == 1:
+                    raise ParseError(
+                        "arrays with more than one dimensions are not supported"
+                    )
+
+                dim = member.dimensions[0]
+                if dim.type is XTokenType.NUMBER:
+                    elements = dim.val
+
+                    if "." in elements or "-" in elements:
+                        raise ParseError(
+                            f"array dim at `{dim.idx}` must be a positive integer"
+                        )
+                elif dim.type is XTokenType.IDENT:
+                    try:
+                        ref = parsed_members[dim.val]
+                    except KeyError:
+                        raise ParseError(f"undefined array dimension at idx {dim.idx}")
+
+                    # i have to use type here and not isinstance because of type checking
+                    # i've never seen it freak out over isinstance so hard... try it yourself
+                    if (not type(ref) is float) or (not ref.is_integer() or ref < 0):
+                        raise ParseError(
+                            f"array dim at `{dim.idx}` must be a positive integer"
+                        )
+
+                    elements = ref
+                else:
+                    raise ParseError(
+                        f"unexpected token `{dim.val}` during array def at idx {dim.idx}"
+                    )
+
+                elements = int(elements)
+
+            print(elements)
+
+            parsed_elems = []
+            for i in range(elements):
+                print(member.type)
+                if member.type in self.templates:
+                    if not isinstance(member.type, str):
+                        raise RuntimeError("unreachable")
+
+                    parsed_elems.append(
+                        self.parse_members_of(self.templates[member.type])
+                    )
+                else:
+                    parsed_elems.append(self.parse_data_member_atom())
+
+                print(parsed_elems)
+
+                if i < elements - 1:
+                    if not (tok := self.peek()).type is XTokenType.COMMA:
+                        raise ParseError(
+                            f"expected comma during array at idx {tok.idx}"
+                        )
+
+                    self.consume()
+
+            if not (tok := self.peek()).type is XTokenType.SEMI:
+                raise ParseError(f"expected semicolon after member at idx {tok.idx}")
+
+            self.consume()
+
+            if member.is_arr:
+                parsed_members[member.name] = parsed_elems
+            else:
+                parsed_members[member.name] = parsed_elems[0]
+
+        return parsed_members
+
+    def try_parse_data(self) -> XData | None:
+        tok = self.peek()
+        if tok.type is XTokenType.IDENT:
+            if tok.val in self.templates:
+                self.consume()
+
+                if not (name_tok := self.peek()).type in (
+                    XTokenType.IDENT,
+                    XTokenType.L_BRACKET,
+                ):
+                    raise ParseError(
+                        f"unexpected token `{name_tok.val}` during data def at idx {name_tok.idx}"
+                    )
+
+                name = ""
+                if name_tok.type is XTokenType.IDENT:
+                    name = self.consume()
+
+                if not self.peek().type is XTokenType.L_BRACKET:
+                    raise ParseError(
+                        f"expected '{{' during data def at idx {self.peek().idx}"
+                    )
+
+                self.consume()
+
+                uuid = ""
+                if self.peek().type is XTokenType.UUID:
+                    uuid = self.consume().val
+
+                members = self.parse_members_of(self.templates[tok.val])
+                print(members)
+                exit()
+            else:
+                raise ParseError(f"undefined template `{tok.val}` at idx {tok.idx}")
 
     def parse(self, tokens: list[XToken]) -> XFile:
         self.index = 0
@@ -313,6 +512,6 @@ class XTextParser:
 
         while not self.peek().type is XTokenType.EOF:
             if not self.try_parse_template_def():
-                if not self.try_parse_data():
+                if self.try_parse_data() is None:
                     # not a template or data, it's probably invalid then
                     raise ParseError(f"unknown expression at idx {self.peek().idx}")

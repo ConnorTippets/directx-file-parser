@@ -20,6 +20,8 @@ class XFileLoader:
             print(tokenizer.tokens)
             raise
 
+        print(contents[1501])
+
         parser = XTextParser()
         file = parser.parse(tokens)
 
