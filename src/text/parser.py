@@ -1,95 +1,25 @@
-from dataclasses import dataclass, field
-from enum import Enum, auto
 from uuid import UUID
 
 from .tokenizer import XToken, XTokenType
-from ..models import XFile, ParseError
-
-
-class XDataType(Enum):
-    WORD = auto()
-    DWORD = auto()
-    FLOAT = auto()
-    DOUBLE = auto()
-    CHAR = auto()
-    UCHAR = auto()
-    BYTE = auto()
-    STRING = auto()
-
-
-#     CSTRING = auto()
-#     UNICODE = auto()
-
-DATA_TYPES = [
-    "WORD",
-    "DWORD",
-    "FLOAT",
-    "DOUBLE",
-    "CHAR",
-    "UCHAR",
-    "BYTE",
-    "STRING",
-]  # , "CSTRING", "UNICODE"]
-
-
-@dataclass
-class XTemplateMemberDef:
-    is_arr: bool
-    type: XDataType | str
-    name: str = ""
-    dimensions: list[XToken] = field(default_factory=list)
-
-
-class XRestrictionType(Enum):
-    OPEN = auto()
-    CLOSED = auto()
-    RESTRICTED = auto()
-
-
-@dataclass
-class XTemplateRestriction:
-    template: str
-    uuid: UUID | None = None
-
-
-@dataclass
-class XTemplate:
-    type: XRestrictionType
-    name: str
-    uuid: UUID
-    members: list[XTemplateMemberDef]
-    restrictions: list[XTemplateRestriction]
-
-
-type XDataField = float | str | list[float] | list[str] | XNestedMember
-
-
-@dataclass
-class XTemplateMember:
-    name: str
-    val: XDataField
-
-
-@dataclass
-class XData:
-    template: str
-    name: str
-    uuid: UUID | None
-    fields: list[XTemplateMember]
-    nested_objects: list[XData]
-
-
-@dataclass
-class XNestedMember:
-    template: str
-    fields: list[XTemplateMember]
+from ..models import (
+    XFile,
+    XDataType,
+    DATA_TYPES,
+    XTemplateMemberDef,
+    XRestrictionType,
+    XTemplateRestriction,
+    XTemplate,
+    XTemplateMember,
+    XData,
+    XNestedMember,
+    ParseError,
+)
 
 
 class XTextParser:
     def __init__(self):
         self.index = 0
         self.tokens: list[XToken] = []
-        self.file: XFile = XFile()
         self.templates: dict[str, XTemplate] = {}
         self.data: list[XData] = []
 
@@ -153,7 +83,7 @@ class XTextParser:
                         f"`{name_or_size_tok.val}` at index {name_or_size_tok.idx} is not a valid array size"
                     )
 
-            dim_sizes: list[XToken] = []
+            dim_sizes: list[int | str] = []
             while not self.peek().type in (XTokenType.EOF, XTokenType.SEMI):
                 if not (l_sq_brack := self.peek()).type is XTokenType.L_SQ_BRACKET:
                     raise ParseError(
@@ -167,14 +97,14 @@ class XTextParser:
                     XTokenType.IDENT,
                 ):
                     raise ParseError(
-                        f"`{dim_size_tok.val}` at index {dim_size_tok.idx} is not a valid array dimension size"
+                        f"`{dim_size_tok.val}` at idx {dim_size_tok.idx} is not a valid array dimension size"
                     )
 
                 dim_size = self.consume().val
 
                 if dim_size_tok.type is XTokenType.NUMBER and "-." in dim_size:
                     raise ParseError(
-                        f"`{dim_size}` at index {dim_size_tok.idx} is not a valid array dimension size"
+                        f"`{dim_size}` at idx {dim_size_tok.idx} is not a valid array dimension size"
                     )
 
                 if not (r_sq_brack := self.peek()).type is XTokenType.R_SQ_BRACKET:
@@ -183,7 +113,11 @@ class XTextParser:
                     )
 
                 self.consume()
-                dim_sizes.append(dim_size_tok)
+
+                if dim_size_tok.val is XTokenType.NUMBER:
+                    dim_sizes.append(int(dim_size))
+                else:
+                    dim_sizes.append(dim_size)
 
             if (semi := self.peek()).type is XTokenType.EOF:
                 raise ParseError(f"unexpected EOF during member def at idx {semi.idx}")
@@ -434,33 +368,20 @@ class XTextParser:
                     )
 
                 dim = member.dimensions[0]
-                if dim.type is XTokenType.NUMBER:
-                    elements = dim.val
-
-                    if "." in elements or "-" in elements:
-                        raise ParseError(
-                            f"array dim at `{dim.idx}` must be a positive integer"
-                        )
-                elif dim.type is XTokenType.IDENT:
+                if isinstance(dim, int):
+                    elements = dim
+                else:
                     try:
-                        ref = next(
-                            filter(lambda x: x.name == dim.val, parsed_members)
-                        ).val
+                        ref = next(filter(lambda x: x.name == dim, parsed_members)).val
                     except StopIteration:
-                        raise ParseError(f"undefined array dimension at idx {dim.idx}")
+                        raise ParseError(f"undefined array dimension `{dim}`")
 
                     # i have to use type here and not isinstance because of type checking
                     # i've never seen it freak out over isinstance so hard... try it yourself
                     if (not type(ref) is float) or (not ref.is_integer() or ref < 0):
-                        raise ParseError(
-                            f"array dim at `{dim.idx}` must be a positive integer"
-                        )
+                        raise ParseError(f"`{ref}` is not a valid array dimension size")
 
                     elements = ref
-                else:
-                    raise ParseError(
-                        f"unexpected token `{dim.val}` during array def at idx {dim.idx}"
-                    )
 
                 elements = int(elements)
 
@@ -586,7 +507,6 @@ class XTextParser:
     def parse(self, tokens: list[XToken]) -> XFile:
         self.index = 0
         self.tokens = tokens
-        self.file = XFile()
         self.templates: dict[str, XTemplate] = {}
         self.data: list[XData] = []
 
@@ -597,3 +517,5 @@ class XTextParser:
                     raise ParseError(f"unknown expression at idx {self.peek().idx}")
                 else:
                     self.data.append(data)
+
+        return XFile(self.templates, self.data)
