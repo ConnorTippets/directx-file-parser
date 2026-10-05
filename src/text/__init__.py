@@ -23,7 +23,10 @@ class XFileLoader:
         parser = XTextParser()
         file = parser.parse(tokens)
 
-        print(parser.templates)
-        print(parser.data)
+        with open("template_out.txt", "w") as f:
+            print(parser.templates, stream=f)
+
+        with open("data_out.txt", "w") as f:
+            print(parser.data, stream=f)
 
         return file

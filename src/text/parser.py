@@ -49,7 +49,7 @@ class XRestrictionType(Enum):
 @dataclass
 class XTemplateRestriction:
     template: str
-    uuid: UUID = UUID(int=0)
+    uuid: UUID | None = None
 
 
 @dataclass
@@ -66,7 +66,7 @@ type XDataField = float | str | list[float] | list[str] | dict[str, XDataField]
 
 @dataclass
 class XData:
-    templ: str
+    template: str
     name: str
     uuid: UUID | None
     fields: dict[str, XDataField]
@@ -486,7 +486,7 @@ class XTextParser:
         tok = self.peek()
         if tok.type is XTokenType.IDENT:
             if tok.val in self.templates:
-                templ = self.templates[tok.val]
+                template = self.templates[tok.val]
                 self.consume()
 
                 if not (name_tok := self.peek()).type in (
@@ -512,18 +512,42 @@ class XTextParser:
                 if self.peek().type is XTokenType.UUID:
                     uuid = self.consume().val
 
-                members = self.parse_members_of(templ)
+                members = self.parse_members_of(template)
 
                 nested_data_objects = []
-                if not templ.type is XRestrictionType.CLOSED:
+                if not template.type is XRestrictionType.CLOSED:
                     while not self.peek().type in (
                         XTokenType.R_BRACKET,
                         XTokenType.EOF,
                     ):
-                        nested_data_objects.append(self.parse_nested_data())
+                        nested_data_object = self.parse_nested_data()
 
-                        if templ.type is XRestrictionType.RESTRICTED:
-                            raise ParseError("todo")
+                        if template.type is XRestrictionType.RESTRICTED:
+                            allowed = False
+                            for restriction in template.restrictions:
+                                if (
+                                    not restriction.template
+                                    == nested_data_object.template
+                                ):
+                                    continue
+
+                                if not restriction.uuid is None:
+                                    if (
+                                        not restriction.uuid
+                                        == self.templates[
+                                            nested_data_object.template
+                                        ].uuid
+                                    ):
+                                        continue
+
+                                allowed = True
+
+                            if not allowed:
+                                raise ParseError(
+                                    f"nesting template `{nested_data_object.template}` inside `{template.name}` is not allowed at idx {self.peek().idx}"
+                                )
+
+                        nested_data_objects.append(nested_data_object)
 
                 if not self.peek().type is XTokenType.R_BRACKET:
                     raise ParseError(
@@ -555,5 +579,4 @@ class XTextParser:
                     # not a template or data, it's probably invalid then
                     raise ParseError(f"unknown expression at idx {self.peek().idx}")
                 else:
-                    print(data)
                     self.data.append(data)
