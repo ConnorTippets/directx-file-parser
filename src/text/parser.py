@@ -73,6 +73,12 @@ class XData:
     nested_objects: list[XData]
 
 
+@dataclass
+class XNestedMember:
+    template: str
+    fields: dict[str, XDataField]
+
+
 class XTextParser:
     def __init__(self):
         self.index = 0
@@ -457,7 +463,10 @@ class XTextParser:
                         raise RuntimeError("unreachable")
 
                     parsed_elems.append(
-                        self.parse_members_of(self.templates[member.type])
+                        XNestedMember(
+                            member.type,
+                            self.parse_members_of(self.templates[member.type]),
+                        )
                     )
                 else:
                     parsed_elems.append(self.parse_data_member_atom())
