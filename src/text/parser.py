@@ -70,6 +70,7 @@ class XData:
     name: str
     uuid: UUID | None
     fields: dict[str, XDataField]
+    nested_objects: list[XData]
 
 
 class XTextParser:
@@ -317,78 +318,96 @@ class XTextParser:
     def parse_data_member_atom(self) -> float | str:
         tok = self.peek()
         if not tok.type in (
-            XTokenType.IDENT,
-            XTokenType.L_BRACKET,
             XTokenType.NUMBER,
             XTokenType.STRING,
         ):
             raise ParseError(f"invalid data member at idx {tok.idx}")
 
-        #         if tok.type is XTokenType.IDENT:
-        #             # nested data definition
-        #
-        #             out = self.try_parse_data()
-        #             if out is None:
-        #                 raise RuntimeError("unreachable")
-        #             return out
-        #         elif tok.type is XTokenType.L_BRACKET:
-        #             # reference to previous data definition
-        #
-        #             self.consume()
-        #             if not (tok := self.peek()).type in (XTokenType.IDENT, XTokenType.UUID):
-        #                 raise ParseError(
-        #                     f"unexpected token `{tok.val}` during data ref at idx {tok.idx}"
-        #                 )
-        #
-        #             ref_name = ""
-        #             if tok.type is XTokenType.IDENT:
-        #                 ref_name = self.consume().val
-        #                 tok = self.peek()
-        #
-        #             if not tok.type in (XTokenType.UUID, XTokenType.R_BRACKET):
-        #                 raise ParseError(
-        #                     f"unexpected token `{tok.val}` during data ref at idx {tok.idx}"
-        #                 )
-        #
-        #             ref_uuid = ""
-        #             if tok.type is XTokenType.UUID:
-        #                 ref_uuid = self.consume().val
-        #                 tok = self.peek()
-        #
-        #             if tok.type is XTokenType.R_BRACKET:
-        #                 self.consume()
-        #             else:
-        #                 raise ParseError(
-        #                     f"unexpected token `{tok.val}` during data ref at idx {tok.idx}"
-        #                 )
-        #
-        #             if ref_name and ref_uuid:
-        #                 if ref_name in self.data and str(self.data[ref_name].uuid) == ref_uuid:
-        #                     return self.data[ref_name]
-        #                 else:
-        #                     raise ParseError(
-        #                         f"undefined data object `{ref_name}` with uuid `{ref_uuid}` at idx {tok.idx}"
-        #                     )
-        #             elif ref_name:
-        #                 if ref_name in self.data:
-        #                     return self.data[ref_name]
-        #                 else:
-        #                     raise ParseError(
-        #                         f"undefined data object `{ref_name}` at idx {tok.idx}"
-        #                     )
-        #             elif ref_uuid:
-        #                 for data_object in self.data.values():
-        #                     if str(data_object.uuid) == ref_uuid:
-        #                         return data_object
-        #                 raise ParseError(f"undefined data object `{ref_uuid}` at idx {tok.idx}")
-        #             else:
-        #                 raise RuntimeError("unreachable")
         if tok.type is XTokenType.NUMBER:
             self.consume()
             return float(tok.val)
         elif tok.type is XTokenType.STRING:
             self.consume()
             return tok.val
+        else:
+            raise RuntimeError("unreachable")
+
+    def parse_nested_data(self) -> XData:
+        tok = self.peek()
+        if not tok.type in (
+            XTokenType.IDENT,
+            XTokenType.L_BRACKET,
+        ):
+            raise ParseError(f"invalid nested data at idx {tok.idx}")
+
+        if tok.type is XTokenType.IDENT:
+            # nested data definition
+
+            out = self.try_parse_data()
+
+            if out is None:
+                raise RuntimeError("unreachable")
+
+            return out
+        elif tok.type is XTokenType.L_BRACKET:
+            # reference to previous data definition
+
+            self.consume()
+            if not (tok := self.peek()).type in (XTokenType.IDENT, XTokenType.UUID):
+                raise ParseError(
+                    f"unexpected token `{tok.val}` during data ref at idx {tok.idx}"
+                )
+
+            ref_name = ""
+            if tok.type is XTokenType.IDENT:
+                ref_name = self.consume().val
+                tok = self.peek()
+
+            if not tok.type in (XTokenType.UUID, XTokenType.R_BRACKET):
+                raise ParseError(
+                    f"unexpected token `{tok.val}` during data ref at idx {tok.idx}"
+                )
+
+            ref_uuid = ""
+            if tok.type is XTokenType.UUID:
+                ref_uuid = self.consume().val
+                tok = self.peek()
+
+            if tok.type is XTokenType.R_BRACKET:
+                self.consume()
+            else:
+                raise ParseError(
+                    f"unexpected token `{tok.val}` during data ref at idx {tok.idx}"
+                )
+
+            if ref_name and ref_uuid:
+                try:
+                    return next(
+                        filter(
+                            lambda x: x.name == ref_name and str(x.uuid) == ref_uuid,
+                            self.data,
+                        )
+                    )
+                except StopIteration:
+                    raise ParseError(
+                        f"undefined data object `{ref_name}` with uuid `{ref_uuid}` at idx {tok.idx}"
+                    )
+            elif ref_name:
+                try:
+                    return next(filter(lambda x: x.name == ref_name, self.data))
+                except StopIteration:
+                    raise ParseError(
+                        f"undefined data object `{ref_name}` at idx {tok.idx}"
+                    )
+            elif ref_uuid:
+                try:
+                    return next(filter(lambda x: str(x.uuid) == ref_uuid, self.data))
+                except StopIteration:
+                    raise ParseError(
+                        f"undefined data object `{ref_uuid}` at idx {tok.idx}"
+                    )
+            else:
+                raise RuntimeError("unreachable")
         else:
             raise RuntimeError("unreachable")
 
@@ -463,10 +482,11 @@ class XTextParser:
 
         return parsed_members
 
-    def try_parse_data(self) -> bool:
+    def try_parse_data(self) -> XData | None:
         tok = self.peek()
         if tok.type is XTokenType.IDENT:
             if tok.val in self.templates:
+                templ = self.templates[tok.val]
                 self.consume()
 
                 if not (name_tok := self.peek()).type in (
@@ -492,23 +512,35 @@ class XTextParser:
                 if self.peek().type is XTokenType.UUID:
                     uuid = self.consume().val
 
-                members = self.parse_members_of(self.templates[tok.val])
+                members = self.parse_members_of(templ)
+
+                nested_data_objects = []
+                if not templ.type is XRestrictionType.CLOSED:
+                    while not self.peek().type in (
+                        XTokenType.R_BRACKET,
+                        XTokenType.EOF,
+                    ):
+                        nested_data_objects.append(self.parse_nested_data())
+
+                        if templ.type is XRestrictionType.RESTRICTED:
+                            raise ParseError("todo")
 
                 if not self.peek().type is XTokenType.R_BRACKET:
-                    raise ParseError("todo")
+                    raise ParseError(
+                        f"unexpected token `{self.peek().val}` at idx {self.peek().idx}"
+                    )
 
                 self.consume()
 
-                self.data.append(
-                    XData(tok.val, name, UUID(uuid) if uuid else None, members)
+                return XData(
+                    tok.val,
+                    name,
+                    UUID(uuid) if uuid else None,
+                    members,
+                    nested_data_objects,
                 )
-                print(self.data[-1])
-
-                return True
             else:
                 raise ParseError(f"undefined template `{tok.val}` at idx {tok.idx}")
-
-        return False
 
     def parse(self, tokens: list[XToken]) -> XFile:
         self.index = 0
@@ -519,6 +551,9 @@ class XTextParser:
 
         while not self.peek().type is XTokenType.EOF:
             if not self.try_parse_template_def():
-                if not self.try_parse_data():
+                if (data := self.try_parse_data()) is None:
                     # not a template or data, it's probably invalid then
                     raise ParseError(f"unknown expression at idx {self.peek().idx}")
+                else:
+                    print(data)
+                    self.data.append(data)
