@@ -33,7 +33,7 @@ DATA_TYPES = [
 
 
 @dataclass
-class XTemplateMember:
+class XTemplateMemberDef:
     is_arr: bool
     type: XDataType | str
     name: str = ""
@@ -57,11 +57,17 @@ class XTemplate:
     type: XRestrictionType
     name: str
     uuid: UUID
-    members: list[XTemplateMember]
+    members: list[XTemplateMemberDef]
     restrictions: list[XTemplateRestriction]
 
 
-type XDataField = float | str | list[float] | list[str] | dict[str, XDataField]
+type XDataField = float | str | list[float] | list[str] | XNestedMember
+
+
+@dataclass
+class XTemplateMember:
+    name: str
+    val: XDataField
 
 
 @dataclass
@@ -69,14 +75,14 @@ class XData:
     template: str
     name: str
     uuid: UUID | None
-    fields: dict[str, XDataField]
+    fields: list[XTemplateMember]
     nested_objects: list[XData]
 
 
 @dataclass
 class XNestedMember:
     template: str
-    fields: dict[str, XDataField]
+    fields: list[XTemplateMember]
 
 
 class XTextParser:
@@ -101,7 +107,7 @@ class XTextParser:
         except IndexError:
             return XToken(XTokenType.EOF, "EOF", self.index)
 
-    def parse_template_def_member(self) -> XTemplateMember:
+    def parse_template_def_member(self) -> XTemplateMemberDef:
         if (not (type_tok := self.peek()).type is XTokenType.IDENT) or (
             not type_tok.val in DATA_TYPES + ["array"] + list(self.templates.keys())
         ):
@@ -184,7 +190,7 @@ class XTextParser:
 
             self.consume()
 
-            return XTemplateMember(
+            return XTemplateMemberDef(
                 True, typ if is_template else getattr(XDataType, typ), name, dim_sizes
             )
         else:
@@ -206,7 +212,7 @@ class XTextParser:
             # when semi colon
             self.consume()
 
-            return XTemplateMember(
+            return XTemplateMemberDef(
                 False, typ if is_template else getattr(XDataType, typ), name
             )
 
@@ -241,7 +247,7 @@ class XTextParser:
 
             uuid = self.consume().val
 
-            members: list[XTemplateMember] = []
+            members: list[XTemplateMemberDef] = []
             while not self.peek().type in (
                 XTokenType.EOF,
                 XTokenType.L_SQ_BRACKET,
@@ -417,8 +423,8 @@ class XTextParser:
         else:
             raise RuntimeError("unreachable")
 
-    def parse_members_of(self, template: XTemplate) -> dict[str, XDataField]:
-        parsed_members: dict[str, XDataField] = {}
+    def parse_members_of(self, template: XTemplate) -> list[XTemplateMember]:
+        parsed_members: list[XTemplateMember] = []
         for member in template.members:
             elements = 1
             if member.is_arr:
@@ -437,8 +443,10 @@ class XTextParser:
                         )
                 elif dim.type is XTokenType.IDENT:
                     try:
-                        ref = parsed_members[dim.val]
-                    except KeyError:
+                        ref = next(
+                            filter(lambda x: x.name == dim.val, parsed_members)
+                        ).val
+                    except StopIteration:
                         raise ParseError(f"undefined array dimension at idx {dim.idx}")
 
                     # i have to use type here and not isinstance because of type checking
@@ -485,9 +493,9 @@ class XTextParser:
             self.consume()
 
             if member.is_arr:
-                parsed_members[member.name] = parsed_elems
+                parsed_members.append(XTemplateMember(member.name, parsed_elems))
             else:
-                parsed_members[member.name] = parsed_elems[0]
+                parsed_members.append(XTemplateMember(member.name, parsed_elems[0]))
 
         return parsed_members
 
