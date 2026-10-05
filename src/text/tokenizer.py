@@ -77,6 +77,7 @@ class XTextTokenizer:
                 else:
                     self.tokens.append(XToken(XTokenType.PERIOD, ".", self.index))
             elif char == '"':
+                self.consume()
                 start_index = self.index
                 string = self.consume()
                 while (string_char := self.peek()) and not string_char in '\n"':
