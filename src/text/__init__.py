@@ -2,8 +2,6 @@ from ..models import XHeader, XFile, ParseError
 from .tokenizer import XTextTokenizer
 from .parser import XTextParser
 
-from pprint import pprint as print
-
 
 class XFileLoader:
     def __init__(self):
@@ -22,11 +20,5 @@ class XFileLoader:
 
         parser = XTextParser()
         file = parser.parse(tokens)
-
-        with open("template_out.txt", "w") as f:
-            print(parser.templates, stream=f)
-
-        with open("data_out.txt", "w") as f:
-            print(parser.data, stream=f)
 
         return file
